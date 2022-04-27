@@ -1,21 +1,27 @@
 package com.stiches.fashionblog.service;
 
 import com.stiches.fashionblog.dto.PostDto;
+import com.stiches.fashionblog.dto.PostDtoTwo;
 import com.stiches.fashionblog.dto.Search;
 import com.stiches.fashionblog.models.Post;
+import org.springframework.http.ResponseEntity;
 
+import javax.servlet.http.HttpSession;
 import java.util.List;
 
 public interface PostService {
-    Post createPost(Integer adminId, PostDto postDto);
+    ResponseEntity<PostDtoTwo> createPost(PostDto postDto, HttpSession session);
 
-    List<Post> getAllPosts();
-    Post findById(Integer id);
-    String deletePost(Integer id);
+    ResponseEntity<List<PostDtoTwo>> getAllPosts();
+    ResponseEntity<PostDtoTwo> findById(Integer id);
+
+    ResponseEntity<String> deletePost(Integer postId, HttpSession session);
 
     void save(Post post);
 
-    Post patchAndPut(Integer adminId, Integer postId, PostDto postDto);
+    ResponseEntity<PostDtoTwo> patchAndPut(HttpSession session, Integer postId, PostDto postDto);
 
-    List<Post> search(Search search);
+    ResponseEntity<List<PostDtoTwo>> search(Search search);
+
+    void check (Integer postId, HttpSession session);
 }

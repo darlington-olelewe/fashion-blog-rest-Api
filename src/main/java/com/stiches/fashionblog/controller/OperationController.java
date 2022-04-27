@@ -1,9 +1,7 @@
 package com.stiches.fashionblog.controller;
 
-import com.stiches.fashionblog.dto.CategoryDto;
-import com.stiches.fashionblog.dto.CommentDto;
-import com.stiches.fashionblog.dto.PostDto;
-import com.stiches.fashionblog.dto.Search;
+import com.stiches.fashionblog.dto.*;
+import com.stiches.fashionblog.exception.NotAuthorized;
 import com.stiches.fashionblog.exception.NotLogedInException;
 import com.stiches.fashionblog.models.*;
 import com.stiches.fashionblog.service.*;
@@ -27,33 +25,31 @@ public class OperationController {
 
 
     @GetMapping("/posts")
-    public ResponseEntity<List<Post>> viewAllPost(){
-        return ResponseEntity.ok(postService.getAllPosts());
+    public ResponseEntity<List<PostDtoTwo>> viewAllPost(){
+        return postService.getAllPosts();
     }
 
     @PostMapping("/posts")
-    public ResponseEntity<Post> createPost(@RequestBody PostDto postDto, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        Post post = postService.createPost(user.getId(),postDto);
-        return new ResponseEntity<>(post, HttpStatus.CREATED);
+    public ResponseEntity<PostDtoTwo> createPost(@RequestBody PostDto postDto, HttpSession session){
+        return postService.createPost(postDto,session);
     }
 
+
     @GetMapping("/posts/{postId}")
-    public ResponseEntity<Post> viewPost(@PathVariable(name = "postId") Integer postId){
-        return ResponseEntity.ok(postService.findById(postId));
+    public ResponseEntity<PostDtoTwo> viewPost(@PathVariable(name = "postId") Integer postId){
+        return postService.findById(postId);
     }
     @PutMapping("/posts/{postId}")
-    public ResponseEntity<Post> viewPost(@PathVariable(name = "postId") Integer postId, @RequestBody PostDto postDto, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        return ResponseEntity.ok(postService.patchAndPut(user.getId(), postId, postDto));
+    public ResponseEntity<PostDtoTwo> viewPost(@PathVariable(name = "postId") Integer postId, @RequestBody PostDto postDto, HttpSession session){
+        return postService.patchAndPut(session, postId, postDto);
     }
 
     @PostMapping("/categories")
-    public ResponseEntity<Category> createCategory(@RequestBody CategoryDto categoryDto, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        if(user.getRole() != Role.ADMIN) throw new RuntimeException();
-        Category category = categoryService.createCategory(categoryDto.getCategory());
-        return new ResponseEntity<>(category,HttpStatus.CREATED);
+    public ResponseEntity<CategoryDto> createCategory(@RequestBody CategoryDto categoryDto, HttpSession session){
+        UserDtoTwo user = (UserDtoTwo) session.getAttribute("user");
+        if(user == null) throw new NotLogedInException("You have to be logged in");
+        if(user.getRole() != Role.ADMIN) throw new NotAuthorized("Reserved for Admin");
+        return categoryService.createCategory(categoryDto);
     }
 
     @GetMapping("/categories")
@@ -61,40 +57,38 @@ public class OperationController {
         return ResponseEntity.ok(categoryService.allCategories());
     }
 
+    @DeleteMapping("/categories/{id}")
+    public ResponseEntity<String> deleteCategory(@PathVariable Integer id){
+        return categoryService.deleteCategory(id);
+    }
+
     @DeleteMapping("/posts/{postId}")
-    public ResponseEntity<String> deletePost(@PathVariable(name = "postId") Integer postId){
-        return ResponseEntity.ok(postService.deletePost(postId));
+    public ResponseEntity<String> deletePost(@PathVariable(name = "postId") Integer postId,HttpSession session){
+        return postService.deletePost(postId,session);
     }
 
     @GetMapping("/posts/{postId}/comments")
-    public ResponseEntity<List<Comment>> getAllComment(@PathVariable Integer postId){
-        return ResponseEntity.ok(commentService.allComentByPost(postId));
+    public ResponseEntity<List<CommentDto>> getAllComment(@PathVariable Integer postId){
+        return commentService.allComentByPost(postId);
     }
 
     @PostMapping("/posts/{postId}/comments")
-    public ResponseEntity<Comment> postAComment(@PathVariable Integer postId, @RequestBody CommentDto commentDto, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        Comment comment = commentService.commentOnPost(postId,user.getId(),commentDto);
-        return new ResponseEntity<>(comment,HttpStatus.CREATED);
+    public ResponseEntity<CommentDto> postAComment(@PathVariable Integer postId, @RequestBody CommentDto commentDto, HttpSession session){
+        return commentService.commentOnPost(postId,session,commentDto);
     }
 
     @PostMapping("/posts/{postId}/likes")
     public ResponseEntity<String> likePost(@PathVariable Integer postId, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        if(user == null) throw new NotLogedInException("You have to be logged in");
-        return new ResponseEntity<>(likeService.likePost(postId,user.getId()), HttpStatus.CREATED);
+        return likeService.likePost(postId,session);
     }
     @DeleteMapping("/posts/{postId}/likes")
     public ResponseEntity<String> unlikePost(@PathVariable Integer postId, HttpSession session){
-        User user = (User) session.getAttribute("user");
-        if(user == null) throw new NotLogedInException("You have to be Logged in");
-
-        return new ResponseEntity<>(likeService.unLikePost(postId,user.getId()), HttpStatus.CREATED);
+    return likeService.unLikePost(postId,session);
     }
 
     @GetMapping("/posts/search")
-    public ResponseEntity<List<Post>> searchPost(@RequestBody Search search){
-        return ResponseEntity.ok(postService.search(search));
+    public ResponseEntity<List<PostDtoTwo>> searchPost(@RequestBody Search search){
+        return postService.search(search);
     }
 
 }

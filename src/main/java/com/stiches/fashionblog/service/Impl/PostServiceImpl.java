@@ -1,33 +1,54 @@
 package com.stiches.fashionblog.service.Impl;
 
 import com.stiches.fashionblog.dto.PostDto;
+import com.stiches.fashionblog.dto.PostDtoTwo;
 import com.stiches.fashionblog.dto.Search;
+import com.stiches.fashionblog.dto.UserDtoTwo;
+import com.stiches.fashionblog.exception.NoAccess;
+import com.stiches.fashionblog.exception.NotAPostIdEx;
+import com.stiches.fashionblog.exception.NotAuthorized;
+import com.stiches.fashionblog.exception.NotLogedInException;
 import com.stiches.fashionblog.models.*;
 import com.stiches.fashionblog.repository.*;
 import com.stiches.fashionblog.service.PostService;
 import lombok.AllArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import javax.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+
 @Service
 @AllArgsConstructor
 public class PostServiceImpl implements PostService {
     private final PostRepo postRepo;
     private final CategoryRepo categoryRepo;
     private final UserRepo userRepo;
+    private final ModelMapper mapper;
     private final LikeRepo likeRepo;
     private final CommentRepo commentRepo;
 
 
 
     @Override
-    public Post createPost(Integer adminId, PostDto postDto) {
-        User user = userRepo.findById(adminId).get();
-        if(user.getRole().equals(Role.CUSTOMER)) throw new RuntimeException();
+    public ResponseEntity<PostDtoTwo> createPost(PostDto postDto, HttpSession session) {
+        UserDtoTwo userdto = (UserDtoTwo) session.getAttribute("user");
+        User user = null;
+        try {
+            user = userRepo.findById(userdto.getId()).get();
+        }catch (Exception e){
+            throw new NotLogedInException("You have to be LoggedIn");
+        }
+
+        if(user.getRole().equals(Role.CUSTOMER)) throw new NotAuthorized("ACCESS DENIED");
 
         Post post = new Post();
+        post.setUser(user);
         post.setTitle(postDto.getTitle());
         post.setContent(postDto.getContent());
         Category cat = null;
@@ -45,41 +66,45 @@ public class PostServiceImpl implements PostService {
             Category cat1 = categoryRepo.save(cate);
             post.setCategory(cat1);
         }
+        post = postRepo.save(post);
 
-        return postRepo.save(post);
+        user.getPosts().add(post);
+        userRepo.save(user);
+
+        return new ResponseEntity<>(mapper.map(post,PostDtoTwo.class), HttpStatus.CREATED);
     }
 
     @Override
-    public List<Post> getAllPosts() {
-        return postRepo.findAll();
+    public ResponseEntity<List<PostDtoTwo>> getAllPosts() {
+
+        List<PostDtoTwo> postDtoTwo = postRepo.findAll()
+                .stream()
+                .map(post -> mapper.map(post,PostDtoTwo.class))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(postDtoTwo);
     }
 
     @Override
-    public Post findById(Integer id) {
-        Optional<Post> optionalPost = postRepo.findById(id);
-        if(optionalPost.isEmpty()) throw new RuntimeException();
-        return optionalPost.get();
+    public ResponseEntity<PostDtoTwo> findById(Integer id) {
+        Post post = postRepo.findById(id).orElseThrow(() -> new NotAPostIdEx("No post with ID of "+id+" Exists"));
+        return ResponseEntity.ok(mapper.map(post,PostDtoTwo.class));
     }
 
     @Override
-    public String deletePost(Integer id) {
-        Post post = postRepo.findById(id).get();
+    public ResponseEntity<String> deletePost(Integer postId, HttpSession session) {
+        check(postId,session);
+        postRepo.deleteById(postId);
+        return ResponseEntity.ok("Post Deleted successfully");
+    }
 
-        List<Comment> comments = commentRepo.findCommentsByPost(post);
-
-        for(int i = 0; i< comments.size(); i++){
-            int pid = comments.get(i).getId();
-            commentRepo.deleteById(pid);
-        }
-
-        List<Like> likes = likeRepo.findLikesByPost(post);
-
-        for(int i = 0; i< likes.size(); i++){
-            int lId = likes.get(i).getId();
-            likeRepo.deleteById(lId);
-        }
-        postRepo.deleteById(id);
-        return "Post deleted";
+    @Override
+    public void check(Integer postId, HttpSession session){
+        UserDtoTwo user = (UserDtoTwo) session.getAttribute("user");
+        if(user == null) throw new NotLogedInException("You have to be logged in");
+        Optional<Post> optionalPost = postRepo.findById(postId);
+        if(optionalPost.isEmpty()) throw new NotAPostIdEx("No post with ID of "+postId+" Exists");
+        if(user.getId() != optionalPost.get().getUser().getId()) throw new NoAccess("You Cannot Alter this post");
     }
 
     @Override
@@ -90,11 +115,10 @@ public class PostServiceImpl implements PostService {
 
 
     @Override
-    public Post patchAndPut(Integer adminId,Integer postId, PostDto postDto) {
-        User user = userRepo.findById(adminId).get();
-        if(user.getRole().equals(Role.CUSTOMER)) throw new RuntimeException();
+    public ResponseEntity<PostDtoTwo> patchAndPut(HttpSession session, Integer postId, PostDto postDto) {
+        check(postId,session);
 
-        Post post = findById(postId);
+        Post post = postRepo.findById(postId).get();
         if(postDto.getTitle() != null){
             post.setTitle(postDto.getTitle());
         }
@@ -118,22 +142,20 @@ public class PostServiceImpl implements PostService {
 
             post.setCategory(category);
         }
-        postRepo.save(post);
+        post = postRepo.save(post);
 
-        return findById(postId);
+        return ResponseEntity.ok(mapper.map(post,PostDtoTwo.class));
     }
 
     @Override
-    public List<Post> search(Search search) {
+    public ResponseEntity<List<PostDtoTwo>> search(Search search) {
         String out = search.getTitle().toLowerCase();
-        List<Post> all = getAllPosts();
-        List<Post> searched = new ArrayList<>();
-        for (var a: all){
-            String in = a.getTitle().toLowerCase();
-            if(in.contains(out)){
-                searched.add(a);
-            }
-        }
-        return searched;
+
+        List<PostDtoTwo> postDtoTwos = postRepo.findAll().stream()
+                .map(post -> mapper.map(post,PostDtoTwo.class))
+                .filter(p -> p.getTitle().toLowerCase().contains(out))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(postDtoTwos);
     }
 }

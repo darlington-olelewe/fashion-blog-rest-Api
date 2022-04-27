@@ -20,15 +20,29 @@ public class Post {
     private String title;
     @Column(nullable = false)
     private String content;
+
+
     @ManyToOne
+//    @JoinColumn(name = "category_id",nullable = false)
     private Category category;
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "post")
+
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "post",cascade = CascadeType.REMOVE)
     private List<Comment> commentList = new ArrayList<>();
+
+
     @JsonIgnore
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "post")
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "post",cascade = CascadeType.REMOVE)
     private List<Like> likeList = new ArrayList<>();
+
+
     private int likeCount;
     private int commentCount;
+
+    @JsonIgnore
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 }
 
 //    @OneToMany(fetch = FetchType.LAZY, mappedBy = "employee")
